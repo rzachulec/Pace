@@ -6,88 +6,54 @@
 //
 
 import SwiftUI
+import EventKit
 
-struct UpcomingTasks: View {
+struct UpcomingTasksList: View {
+    @EnvironmentObject var calendarManager: CalendarManager
+    
+    @State private var selectedTask: EKEvent?
+    @State var showEditTask: Bool = false
+    @State var date: Date = Date()
+    
     var body: some View {
-        
         VStack(alignment: .leading) {
-            HStack{
-                Text("Upcoming Tasks:")
-                Spacer()
-            }
             ScrollView() {
-                VStack() {
-                    Divider()
-                    
-                    HStack {
-                        Text("Gym")
-                            .font(.title2)
-                        Spacer()
-                        Text("6 PM - 2 h")
-                    }
-                    Divider()
-                    
-                    HStack {
-                        Text("Shopping")
-                            .font(.title2)
-                        Spacer()
-                        Text("8 PM - 1 h")
-                    }
-                    Divider()
-                    
-                    HStack {
-                        Text("Cook dinner")
-                            .font(.title2)
-                        Spacer()
-                        Text("9 PM - 1 h")
+                VStack(spacing: 0) {
+                    let filteredEvents = calendarManager.events.filter {
+                        $0.startDate >= date && $0.endDate < date.addingTimeInterval(60 * 60 * 24)
                     }
                     
-                    Divider()
-                    
-                    HStack {
-                        Text("Read")
-                            .font(.title2)
-                        Spacer()
-                        Text("10 PM - 30 m")
-                    }
-                    Divider()
-                    
-                    HStack {
-                        Text("Read")
-                            .font(.title2)
-                        Spacer()
-                        Text("10 PM - 30 m")
-                    }
-                    
-                    Divider()
-                    
-                    HStack {
-                        Text("Read")
-                            .font(.title2)
-                        Spacer()
-                        Text("10 PM - 30 m")
-                    }
-                    
-                    Divider()
-                    
-                    HStack {
-                        Text("Read")
-                            .font(.title2)
-                        Spacer()
-                        Text("10 PM - 30 m")
+                    if filteredEvents.isEmpty {
+                        VStack {
+                            Text("No tasks.")
+                                .font(.headline)
+                                .foregroundColor(.gray)
+                                .padding()
+                            
+                            
+                            AddTask(startDate: date)
+                        }
+                    } else {
+                        ForEach(filteredEvents, id: \.self) { event in
+                            UpcomingTask(event: event, showEditTask: showEditTask) {
+                                selectedTask = event
+                                showEditTask = true
+                            }
+                        }
+                        AddTask(startDate: date)
                     }
                 }
+                .zIndex(-1)
+            }
+            if let unwrappedSelectedTask = selectedTask {
+                EditTask(showEditTask: $showEditTask, event: unwrappedSelectedTask)
             }
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(.gray)
-        )
-        .padding(.bottom, 15)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
     }
 }
 
 #Preview {
-    UpcomingTasks()
+    UpcomingTasksList()
+        .environmentObject(CalendarManager())
 }

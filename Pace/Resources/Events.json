@@ -1,0 +1,37 @@
+[
+    {
+        "id": "akjshdkajshdkajsdf1",
+        "title": "Gym",
+        "startDate": 1707845792.374834,
+        "duration": 600,
+        "isStationary": false,
+    },
+    {
+        "id": "akjshdkajshdkajsdf2",
+        "title": "Shopping",
+        "startDate": 1707845792.374834,
+        "duration": 600,
+        "isStationary": false,
+    },
+    {
+        "id": "akjshdkajshdkajsdf3",
+        "title": "Gym",
+        "startDate": 1707845792.374834,
+        "duration": 600,
+        "isStationary": false,
+    },
+    {
+        "id": "akjshdkajshdkajsdf4",
+        "title": "Gym",
+        "startDate": 1707845792.374834,
+        "duration": 600,
+        "isStationary": false,
+    },
+    {
+        "id": "akjshdkajshdkajsdf5",
+        "title": "Gym",
+        "startDate": 1707845792.374834,
+        "duration": 600,
+        "isStationary": false,
+    },
+]

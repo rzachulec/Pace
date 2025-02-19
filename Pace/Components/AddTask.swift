@@ -8,17 +8,16 @@
 import SwiftUI
 
 struct AddTask: View {
+    @EnvironmentObject var calendarManager: CalendarManager
+
     @State private var showAddTask: Bool = false
     @State private var title: String = ""
-    @State private var startDate = Date()
-    @State private var startTime = Date()
+    @State var startDate = Date()
+    @State var startTime = Date()
     @State private var durationIndex = 0
-    @State private var isDatePressed = false // Tracks button press state
-    @State private var isTimePressed = false // Tracks button press state
-    let durations = [30, 60, 90, 120] // Durations in minutes
-    
-    @EnvironmentObject var calendarManager: CalendarManager
-    
+    @State private var isDatePressed = false
+    @State private var isTimePressed = false
+    let durations = [30, 60, 90, 120]
     
     var body: some View {
         Button(action: {
@@ -28,23 +27,17 @@ struct AddTask: View {
                 .font(.headline)
                 .frame(maxWidth: .infinity)
                 .padding()
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .strokeBorder(.gray, lineWidth: 1)
-                )
         }
         .sheet(isPresented: $showAddTask) {
             VStack(spacing: 20) {
                 
                 Text("Add Task")
                     .font(.headline)
-                    .padding(.top)
                 
                 TextField("Event Title", text: $title)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding(.horizontal)
                 
-                // Date Picker
                 HStack {
                     DatePicker("Start date", selection: $startDate, displayedComponents: .date)
                         .datePickerStyle(.compact)
@@ -87,7 +80,6 @@ struct AddTask: View {
                 }
                 .padding(.horizontal)
                 
-                // Duration Picker
                 Picker("Duration", selection: $durationIndex) {
                     ForEach(0..<durations.count, id: \.self) { index in
                         Text("\(durations[index]) min").tag(index)
@@ -96,7 +88,6 @@ struct AddTask: View {
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
                 
-                // Add Button
                 Button(action: {
                     addEvent()
                     showAddTask.toggle()
@@ -111,15 +102,24 @@ struct AddTask: View {
                 }
                 .padding(.horizontal)
                 
-                // Close Button
-                Button("Close") {
-                    showAddTask.toggle()
-                }
-                .foregroundColor(.red)
-                
                 Spacer()
             }
+            .overlay(
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            showAddTask = false
+                        }) {
+                            Text("Done")
+                                .font(.title3)
+                        }
+                    }
+                    Spacer()
+                }
+            )
             .padding()
+            .padding(.top)
             .presentationDetents([.medium, .large])
             .presentationBackground(.thinMaterial)
         }
@@ -142,7 +142,7 @@ struct AddTask: View {
     func addEvent() {
         let selectedDuration = durations[durationIndex]
         
-        // Combine date and time into one Date object
+        // combine date and time
         let calendar = Calendar.current
         var dateComponents = calendar.dateComponents([.year, .month, .day], from: startDate)
         let timeComponents = calendar.dateComponents([.hour, .minute], from: startTime)
@@ -159,3 +159,6 @@ struct AddTask: View {
     }
 }
 
+#Preview {
+    AddTask()
+}
