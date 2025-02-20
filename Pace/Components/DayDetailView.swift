@@ -56,3 +56,4 @@ struct DayDetailView: View {
             }
     }
 }
+
