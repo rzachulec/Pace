@@ -6,8 +6,10 @@
 //
 
 import Foundation
+import SwiftUI
 
-class DayPercentageTracker: ObservableObject {
+class AnimationHandler: ObservableObject {
+
     @Published var wakeUpTime: Int = 7
     @Published var sleepTime: Int = 25
     
@@ -17,6 +19,17 @@ class DayPercentageTracker: ObservableObject {
      
     @Published var percentageOfDay: Int = 0
     @Published var offsetY: CGFloat = -50
+    
+    func startAnimation() {
+        print("Before animation: \(offsetY)")
+        objectWillChange.send()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {  // Small delay to allow rendering
+            withAnimation(Animation.interpolatingSpring(duration: 5).repeatForever(autoreverses: true)) {
+                self.offsetY = 350
+            }
+        }
+        print("After animation: \(offsetY)")
+    }
 
     init(wakeUpTime: Int = 7, sleepTime: Int = 23) {
         let calendar = Calendar.current

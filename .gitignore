@@ -5,3 +5,61 @@
 //  Created by jan on 16/02/2025.
 //
 
+# macOS & Xcode
+.DS_Store
+xcuserdata/
+*.xcworkspace/
+*.xcodeproj/project.xcworkspace/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcuserstate
+DerivedData/
+archives/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.moved-aside
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# CocoaPods
+Pods/
+Podfile.lock
+
+# Carthage
+Carthage/
+Carthage/Build/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/
+fastlane/test_output/
+
+# SPM Artifacts
+.swiftpm/xcode/
+.sourcekit-lsp
+
+# Logs
+*.log
+*.log.*
+
+# Generated Files
+*.hmap
+*.xcuserstate
+*.xcscmblueprint
+
+# Temporary Files
+*.swp
+*.swo
+*.swn
+
+# Swift Playgrounds
+timeline.xctimeline
+playground.xcworkspace/
+
+# Excluded Personal Configuration
+*.xcsettings
