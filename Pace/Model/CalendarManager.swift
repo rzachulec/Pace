@@ -48,14 +48,22 @@ protocol CalendarProviding: AnyObject {
     func events(matching predicate: NSPredicate) -> [EKEvent]
     /// Creates a new blank EKEvent backed by this store — needed because EKEvent(eventStore:) takes a concrete EKEventStore.
     func makeEvent() -> EKEvent
+    /// Creates a new blank EKCalendar backed by this store.
+    func makeCalendar() -> EKCalendar
     var defaultCalendarForNewEvents: EKCalendar? { get }
+    var availableSources: [EKSource] { get }
+    func calendars(for entityType: EKEntityType) -> [EKCalendar]
     func save(_ event: EKEvent, span: EKSpan) throws
     func remove(_ event: EKEvent, span: EKSpan) throws
+    func saveCalendar(_ calendar: EKCalendar, commit: Bool) throws
+    func removeCalendar(_ calendar: EKCalendar, commit: Bool) throws
     func event(withIdentifier identifier: String) -> EKEvent?
 }
 
 extension EKEventStore: CalendarProviding {
     func makeEvent() -> EKEvent { EKEvent(eventStore: self) }
+    func makeCalendar() -> EKCalendar { EKCalendar(for: .event, eventStore: self) }
+    var availableSources: [EKSource] { sources }
 }
 
 // MARK: - EventPersisting
@@ -450,5 +458,122 @@ class CalendarManager: ObservableObject {
             self.showAlert = true
         }
         completion(.failure(NSError(domain: "No Time Available", code: 2, userInfo: nil)))
+    }
+
+    // MARK: - Subscribed calendar management
+
+    enum CloneResult {
+        case success(eventCount: Int)
+        /// Events were copied but the subscription could not be removed — user should delete it manually.
+        case partialSuccess(eventCount: Int)
+        case failure(Error)
+    }
+
+    enum CloneError: LocalizedError {
+        case noWritableSource
+        case saveCalendarFailed(Error)
+
+        var errorDescription: String? {
+            switch self {
+            case .noWritableSource:
+                return "No writable calendar account found. Please configure iCloud or add a local calendar account in Settings."
+            case .saveCalendarFailed(let e):
+                return "Failed to create the new calendar: \(e.localizedDescription)"
+            }
+        }
+    }
+
+    @Published var subscribedCalendars: [EKCalendar] = []
+
+    func loadSubscribedCalendars() {
+        let all = store.calendars(for: .event)
+        DispatchQueue.main.async {
+            self.subscribedCalendars = all.filter { $0.isSubscribed }
+        }
+    }
+
+    func cloneAndUnsubscribe(_ subscribed: EKCalendar, completion: @escaping (CloneResult) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+
+            guard let source = self.writableSource() else {
+                DispatchQueue.main.async { completion(.failure(CloneError.noWritableSource)) }
+                return
+            }
+
+            let newCalendar = self.store.makeCalendar()
+            newCalendar.title = subscribed.title
+            newCalendar.cgColor = subscribed.cgColor
+            newCalendar.source = source
+
+            do {
+                try self.store.saveCalendar(newCalendar, commit: true)
+            } catch {
+                DispatchQueue.main.async { completion(.failure(CloneError.saveCalendarFailed(error))) }
+                return
+            }
+
+            // Fetch in two 4-year windows to stay within EventKit's predicate limit.
+            let now = Date()
+            let cal = Calendar.current
+            let past = cal.date(byAdding: .year, value: -4, to: now)!
+            let future = cal.date(byAdding: .year, value: 4, to: now)!
+
+            let pastPred = self.store.predicateForEvents(withStart: past, end: now, calendars: [subscribed])
+            let futurePred = self.store.predicateForEvents(withStart: now, end: future, calendars: [subscribed])
+
+            // Deduplicate events that fall exactly on the 'now' boundary.
+            var seenIDs = Set<String>()
+            let allEvents = (self.store.events(matching: pastPred) + self.store.events(matching: futurePred))
+                .filter { seenIDs.insert($0.eventIdentifier).inserted }
+
+            var copiedCount = 0
+            for sourceEvent in allEvents {
+                let newEvent = self.store.makeEvent()
+                newEvent.calendar = newCalendar
+                newEvent.title = sourceEvent.title
+                newEvent.startDate = sourceEvent.startDate
+                newEvent.endDate = sourceEvent.endDate
+                newEvent.isAllDay = sourceEvent.isAllDay
+                newEvent.location = sourceEvent.location
+                newEvent.notes = sourceEvent.notes
+                newEvent.url = sourceEvent.url
+                newEvent.timeZone = sourceEvent.timeZone
+                do {
+                    try self.store.save(newEvent, span: .thisEvent)
+                    copiedCount += 1
+                } catch {
+                    print("⚠️ Skipped '\(sourceEvent.title ?? "(no title)")': \(error.localizedDescription)")
+                }
+            }
+
+            do {
+                try self.store.removeCalendar(subscribed, commit: true)
+            } catch {
+                // Events were copied successfully; only the unsubscription step failed.
+                // Surface as partial success so the user knows to remove the subscription manually.
+                self.loadSubscribedCalendars()
+                self.fetchEvents(date: Date())
+                DispatchQueue.main.async { completion(.partialSuccess(eventCount: copiedCount)) }
+                return
+            }
+
+            self.loadSubscribedCalendars()
+            self.fetchEvents(date: Date())
+            DispatchQueue.main.async { completion(.success(eventCount: copiedCount)) }
+        }
+    }
+
+    // Returns the best available writable source for creating a new calendar.
+    // Prefers the default calendar's source; falls back to any local or CalDAV source.
+    private func writableSource() -> EKSource? {
+        if let source = store.defaultCalendarForNewEvents?.source,
+           source.sourceType != .subscribed,
+           source.sourceType != .birthdays {
+            return source
+        }
+        return store.availableSources.first {
+            $0.sourceType == .local || $0.sourceType == .calDAV
+        }
     }
 }
