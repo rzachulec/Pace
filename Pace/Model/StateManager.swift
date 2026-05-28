@@ -8,6 +8,28 @@
 import Foundation
 import SwiftUI
 
+enum TransportMode: String, CaseIterable {
+    case automobile, walking, transit, bike
+
+    var label: String {
+        switch self {
+        case .automobile: return "Driving"
+        case .walking:    return "Walking"
+        case .transit:    return "Transit"
+		case .bike:       return "Cycling"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .automobile: return "car.fill"
+        case .walking:    return "figure.walk"
+        case .transit:    return "tram.fill"
+		case .bike:		  return "bicycle"
+        }
+    }
+}
+
 class StateManager: ObservableObject {
     
     static let shared = StateManager()
@@ -28,6 +50,8 @@ class StateManager: ObservableObject {
     }
     @AppStorage("workingDaysString") var workingDaysString: String = "1111111"
     @AppStorage("breakDuration") var breakDuration: Int = 30
+    @AppStorage("transportMode") var transportMode: TransportMode = .automobile
+    @AppStorage("travelTimePadding") var travelTimePadding: Int = 10
     @AppStorage("maxWorkingHours") var maxWorkingHours: Int = 8
     @AppStorage("dayLength") var dayLength: Int = 16
     

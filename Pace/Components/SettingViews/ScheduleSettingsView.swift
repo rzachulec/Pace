@@ -112,6 +112,21 @@ struct ScheduleSettingsView: View {
                         Toggle(StateManager.DayOfWeek(rawValue: index)!.description, isOn: $stateManager.workingDays[index])
                     }
                 }
+
+                Section(header: Text("Travel time").font(.caption)) {
+                    Picker("Transport", selection: $stateManager.transportMode) {
+                        ForEach(TransportMode.allCases, id: \.self) { mode in
+                            Label(mode.label, systemImage: mode.icon).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    Stepper(
+                        "Extra padding: \(stateManager.travelTimePadding) min",
+                        value: $stateManager.travelTimePadding,
+                        in: 0...60,
+                        step: 5
+                    )
+                }
             }
             .navigationTitle("Schedule Settings")
         }
