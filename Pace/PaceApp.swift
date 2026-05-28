@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
 struct PaceApp: App {
@@ -24,5 +25,6 @@ struct PaceApp: App {
                 .environmentObject(stateManager)
                 .tint(Color.fromAccentName(accentColorName))
         }
+        .modelContainer(for: SavedLocation.self)
     }
 }

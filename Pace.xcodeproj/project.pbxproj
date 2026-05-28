@@ -401,6 +401,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = Pace/Pace.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
@@ -409,7 +410,12 @@
 				DEVELOPMENT_TEAM = HJ939Y3Q8W;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "We need access to display and manage your events.";
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "We need access to display and manage your events.";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "We need access to save events to your calendar.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "We use your location to calculate travel times and help you select event venues.";
+				INFOPLIST_KEY_NSLocationUsageDescription = "We use your location to calculate travel times and help you select event venues.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We use your location to calculate travel times and help you select event venues.";				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
@@ -440,6 +446,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = Pace/Pace.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
@@ -448,7 +455,12 @@
 				DEVELOPMENT_TEAM = HJ939Y3Q8W;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "We need access to display and manage your events.";
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "We need access to display and manage your events.";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "We need access to save events to your calendar.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "We use your location to calculate travel times and help you select event venues.";
+				INFOPLIST_KEY_NSLocationUsageDescription = "We use your location to calculate travel times and help you select event venues.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We use your location to calculate travel times and help you select event venues.";				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
@@ -481,7 +493,12 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "We need access to display and manage your events.";
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "We need access to display and manage your events.";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "We need access to save events to your calendar.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "We use your location to calculate travel times and help you select event venues.";
+				INFOPLIST_KEY_NSLocationUsageDescription = "We use your location to calculate travel times and help you select event venues.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We use your location to calculate travel times and help you select event venues.";				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = ocornercode.PaceTests;
@@ -503,7 +520,12 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "We need access to display and manage your events.";
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "We need access to display and manage your events.";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "We need access to save events to your calendar.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "We use your location to calculate travel times and help you select event venues.";
+				INFOPLIST_KEY_NSLocationUsageDescription = "We use your location to calculate travel times and help you select event venues.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We use your location to calculate travel times and help you select event venues.";				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = ocornercode.PaceTests;
@@ -524,7 +546,12 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "We need access to display and manage your events.";
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "We need access to display and manage your events.";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "We need access to save events to your calendar.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "We use your location to calculate travel times and help you select event venues.";
+				INFOPLIST_KEY_NSLocationUsageDescription = "We use your location to calculate travel times and help you select event venues.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We use your location to calculate travel times and help you select event venues.";				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = ocornercode.PaceUITests;
@@ -545,7 +572,12 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "We need access to display and manage your events.";
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "We need access to display and manage your events.";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "We need access to save events to your calendar.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "We use your location to calculate travel times and help you select event venues.";
+				INFOPLIST_KEY_NSLocationUsageDescription = "We use your location to calculate travel times and help you select event venues.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We use your location to calculate travel times and help you select event venues.";				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = ocornercode.PaceUITests;
