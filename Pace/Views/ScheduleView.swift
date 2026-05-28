@@ -7,17 +7,22 @@
 
 import SwiftUI
 
+// Single state that drives both sheet presentation and its content,
+// eliminating the showDayView + selectedDate race that blanked the first open.
+struct SelectedDay: Identifiable {
+    let date: Date
+    var id: TimeInterval { date.timeIntervalSinceReferenceDate }
+}
+
 struct ScheduleView: View {
     @EnvironmentObject var calendarManager: CalendarManager
     @EnvironmentObject var stateManager: StateManager
+    @Environment(\.verticalSizeClass) var verticalSizeClass
 
     @State private var currentDate = Date()
-    @State private var showDayView: Bool = false
-    @State private var selectedDate: Date?
-    // Removed: showEditTask, selectedTask (EKEvent — wrong type), dayLength, wakeTime, sleepTime
-    //          — all declared but never assigned or read.
+    @State private var selectedDay: SelectedDay?
 
-    // MARK: - Shared date helpers (were recomputed 3× per render from identical calendar arithmetic)
+    // MARK: - Shared date helpers
 
     private var startOfWeek: Date {
         let cal = Calendar.current
@@ -65,6 +70,22 @@ struct ScheduleView: View {
         return "\(label): \n \(range) \n"
     }
 
+    private var weekLabel: String {
+        switch weekOffset {
+        case 0:  return "This week"
+        case 1:  return "Next week"
+        case -1: return "Last week"
+        case let n where n > 1:  return "In \(n) weeks"
+        case let n where n < -1: return "\(-n) weeks back"
+        default: return "This week"
+        }
+    }
+
+    private var weekDateRange: String {
+        let f = Self.weekRangeFormatter
+        return "\(f.string(from: startOfWeek)) – \(f.string(from: endOfWeek))"
+    }
+
     var filteredEvents: [EventData] {
         let start = startOfWeek
         let end = endOfWeek
@@ -74,8 +95,6 @@ struct ScheduleView: View {
         }
     }
 
-    // Named tuple — replaces Binding.constant() which is a read-only wrapper that silently
-    // drops writes; these values are never mutated by child views.
     private struct DayGroup {
         let day: String
         let date: Date
@@ -87,7 +106,6 @@ struct ScheduleView: View {
         let formatter = Self.dayNameFormatter
         let days = (0...6).compactMap { cal.date(byAdding: .day, value: $0, to: startOfWeek) }
         let names = days.map { formatter.string(from: $0) }
-        // filteredEvents is a computed var — pass the result in so it runs once, not twice.
         let grouped = Dictionary(grouping: filteredEvents, by: { formatter.string(from: $0.startDate!) })
         return zip(names, days).map { DayGroup(day: $0, date: $1, events: grouped[$0] ?? []) }
     }
@@ -100,87 +118,152 @@ struct ScheduleView: View {
         Calendar.current.isDateInToday(date)
     }
 
-    // MARK: - Body
+    // MARK: - Sizing helpers
 
-    var body: some View {
+    // Rows shrink in landscape so 7 days fit without overlap.
+    private var rowHeight: CGFloat { verticalSizeClass == .compact ? 37 : 65 }
+
+    // Nav buttons scale down proportionally in landscape.
+    private var navButtonHeight: CGFloat { verticalSizeClass == .compact ? 100 : 100 }
+	
+	private var rowSpacing: CGFloat { verticalSizeClass == .compact ? 5 : 10 }
+
+    // MARK: - Sub-views
+
+    private var navButtons: some View {
+        HStack(spacing: 5) {
+            Button(action: { shiftWeek(by: -1) }) {
+                Image(systemName: "chevron.left")
+                    .font(.title)
+                    .foregroundColor(.primary)
+                    .frame(width: 55, height: navButtonHeight)
+                    .background(Color.gray.opacity(0.5))
+            }
+            Button(action: { shiftWeek(by: 1) }) {
+                Image(systemName: "chevron.right")
+                    .font(.title)
+                    .foregroundColor(.primary)
+                    .frame(width: 55, height: navButtonHeight)
+                    .background(Color.gray.opacity(0.5))
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+    }
+
+    @ViewBuilder
+    private var scheduleGrid: some View {
+        let rh = rowHeight
+		let rs = rowSpacing
+        if stateManager.weekViewMode == "summary" {
+            VStack(spacing: rs) {
+                HStack {
+                    Text("0")
+                    Spacer()
+                    Text("\(stateManager.dayLength / 2)")
+                    Spacer()
+                    Text("\(stateManager.dayLength)")
+                }
+                .padding(.horizontal)
+                .padding(.top, 4)
+
+                ForEach(groupEventsByDay(), id: \.day) { group in
+                    WeekSummaryComponent(
+                        day: group.day,
+                        date: group.date,
+                        events: group.events,
+                        selectedDay: $selectedDay,
+                        rowHeight: rh
+                    )
+                }
+            }
+        } else {
+            VStack(spacing: rs) {
+                HStack {
+                    Text("\(stateManager.wakeUpTime)")
+                    Spacer()
+                    Text("\((stateManager.wakeUpTime + stateManager.dayLength / 4) % 24)")
+                    Spacer()
+                    Text("\((stateManager.wakeUpTime + stateManager.dayLength / 2) % 24)")
+                    Spacer()
+                    Text("\((stateManager.sleepTime - stateManager.dayLength / 4) % 24)")
+                    Spacer()
+                    Text("\(stateManager.sleepTime % 24)")
+                }
+                .padding(.top, 4)
+
+                ForEach(groupEventsByDay(), id: \.day) { group in
+                    WeekSplitComponent(
+                        day: group.day,
+                        date: group.date,
+                        events: group.events,
+                        selectedDay: $selectedDay,
+                        isToday: isToday(group.date),
+                        rowHeight: rh
+                    )
+                }
+            }
+        }
+    }
+
+    // MARK: - Layout variants
+
+    private var portraitLayout: some View {
         VStack {
             HStack {
                 Text(currentWeekRange)
                     .font(.title)
                     .fontWeight(.semibold)
                 Spacer()
-                HStack(spacing: 5) {
-                    Button(action: { shiftWeek(by: -1) }) {
-                        Image(systemName: "chevron.left")
-                            .font(.title)
-                            .foregroundColor(.primary)
-                            .frame(width: 55, height: 100)
-                            .background(Color.gray.opacity(0.5))
-                    }
-                    Button(action: { shiftWeek(by: 1) }) {
-                        Image(systemName: "chevron.right")
-                            .font(.title)
-                            .foregroundColor(.primary)
-                            .frame(width: 55, height: 100)
-                            .background(Color.gray.opacity(0.5))
-                    }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 20))
+                navButtons
             }
-
-            if stateManager.weekViewMode == "summary" {
-                VStack {
-                    HStack {
-                        Text("0")
-                        Spacer()
-                        Text("\(stateManager.dayLength / 2)")
-                        Spacer()
-                        Text("\(stateManager.dayLength)")
-                    }
-                    .padding(.horizontal)
-                    .padding(.top)
-
-                    ForEach(groupEventsByDay(), id: \.day) { group in
-                        WeekSummaryComponent(
-                            day: group.day,
-                            date: group.date,
-                            events: group.events,
-                            selectedDate: $selectedDate,
-                            showDayView: $showDayView
-                        )
-                    }
-                }
-            } else if stateManager.weekViewMode == "split" {
-                VStack {
-                    HStack {
-                        Text("\(stateManager.wakeUpTime)")
-                        Spacer()
-                        Text("\((stateManager.wakeUpTime + stateManager.dayLength / 4) % 24)")
-                        Spacer()
-                        Text("\((stateManager.wakeUpTime + stateManager.dayLength / 2) % 24)")
-                        Spacer()
-                        Text("\((stateManager.sleepTime - stateManager.dayLength / 4) % 24)")
-                        Spacer()
-                        Text("\(stateManager.sleepTime % 24)")
-                    }
-                    .padding(.top)
-
-                    ForEach(groupEventsByDay(), id: \.day) { group in
-                        WeekSplitComponent(
-                            day: group.day,
-                            date: group.date,
-                            events: group.events,
-                            selectedDate: $selectedDate,
-                            showDayView: $showDayView,
-                            isToday: isToday(group.date)
-                        )
-                    }
-                }
-            }
-
+            scheduleGrid
             Spacer()
         }
         .padding()
+    }
+
+    // Left quarter: week label + nav buttons pinned to bottom of the schedule.
+    // Right three-quarters: time axis + day rows.
+    // No Spacer in right panel so HStack height = schedule content height,
+    // which lets the Spacer in the left panel push buttons to schedule's bottom.
+    private var landscapeLayout: some View {
+        HStack(alignment: .top, spacing: 0) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(weekLabel)
+                    .font(.title)
+                    .fontWeight(.semibold)
+                Text(weekDateRange)
+                    .font(.title2)
+					.fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                navButtons
+            }
+//            .padding(.vertical)
+            .containerRelativeFrame(.horizontal, count: 4, span: 1, spacing: 0)
+
+            scheduleGrid
+                .padding(.leading)
+                .containerRelativeFrame(.horizontal, count: 4, span: 3, spacing: 0)
+//			Spacer()
+        }
+        // Without fixedSize the HStack expands to fill available screen height and
+        // Spacer pushes the buttons to the screen bottom rather than the schedule bottom.
+        // fixedSize(vertical: true) locks HStack height to its content (= schedule grid),
+        // so Spacer fills exactly to the last row.
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    // MARK: - Body
+
+    var body: some View {
+        Group {
+            if verticalSizeClass == .compact {
+                landscapeLayout
+            } else {
+                portraitLayout
+            }
+        }
         .onAppear {
             guard calendarManager.authorizationStatus == .fullAccess else { return }
             calendarManager.fetchEvents(date: currentDate)
@@ -189,19 +272,12 @@ struct ScheduleView: View {
             guard calendarManager.authorizationStatus == .fullAccess else { return }
             calendarManager.fetchEvents(date: newDate)
         }
-        // Sheet lives on the ScheduleView body, which is always in the hierarchy.
-        // The old pattern conditionally inserted DayDetailView only when selectedDate
-        // was non-nil — because showDayView became true in the same frame, SwiftUI saw
-        // the .sheet modifier appear at the same instant it was asked to be open and
-        // silently dropped the presentation.
-        .sheet(isPresented: $showDayView, onDismiss: { selectedDate = nil }) {
-            if let date = selectedDate {
-                DayDetailView(date: date)
-                    .environmentObject(calendarManager)
-                    .environmentObject(stateManager)
-                    .presentationDetents([.medium, .large])
-                    .presentationBackground(.thinMaterial)
-            }
+        .sheet(item: $selectedDay) { selection in
+            DayDetailView(date: selection.date)
+                .environmentObject(calendarManager)
+                .environmentObject(stateManager)
+                .presentationDetents([.medium, .large])
+                .presentationBackground(.thinMaterial)
         }
     }
 }

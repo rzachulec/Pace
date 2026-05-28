@@ -15,8 +15,8 @@ struct WeekSummaryComponent: View {
     let date: Date
     let events: [EventData]
 
-    @Binding var selectedDate: Date?
-    @Binding var showDayView: Bool
+    @Binding var selectedDay: SelectedDay?
+    var rowHeight: CGFloat = 55
 
     var body: some View {
         let totalDuration = events.reduce(0.0) { sum, e in
@@ -25,13 +25,12 @@ struct WeekSummaryComponent: View {
         } / 3600
 
         Button(action: {
-            selectedDate = date
-            showDayView = true
+            selectedDay = SelectedDay(date: date)
         }) {
             ZStack {
                 RoundedRectangle(cornerRadius: 20)
                     .strokeBorder(.gray.opacity(0), lineWidth: 4)
-                    .frame(height: 55)
+                    .frame(height: rowHeight)
                     .overlay(
                         HStack(spacing: 0) {
                             let barColor: Color = events.first?.ekEvent?.calendar.cgColor.map { Color(cgColor: $0) } ?? .accentColor
@@ -46,11 +45,13 @@ struct WeekSummaryComponent: View {
                     Spacer()
                     Text("\(events.count) tasks, \(String(format: "%.0f", totalDuration)) h")
                 }
-                .padding()
+                .padding(.horizontal)
+                .frame(height: rowHeight)
                 .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.gray, lineWidth: 1))
                 .foregroundColor(.primary)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 20))
+        .frame(height: rowHeight)
     }
 }

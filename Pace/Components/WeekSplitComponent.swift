@@ -16,9 +16,9 @@ struct WeekSplitComponent: View {
     let date: Date
     let events: [EventData]
 
-    @Binding var selectedDate: Date?
-    @Binding var showDayView: Bool
+    @Binding var selectedDay: SelectedDay?
     var isToday: Bool
+    var rowHeight: CGFloat = 55
 
     var body: some View {
         let now = Date()
@@ -27,8 +27,7 @@ struct WeekSplitComponent: View {
         let getDayLength = stateManager.dayLength
 
         Button(action: {
-            selectedDate = date
-            showDayView = true
+            selectedDay = SelectedDay(date: date)
         }) {
             let eventsFiltered = events.filter {
                 guard let start = $0.startDate, let end = $0.endDate else { return false }
@@ -39,7 +38,7 @@ struct WeekSplitComponent: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 20)
                         .strokeBorder(lineWidth: 0)
-                        .frame(height: 55)
+                        .frame(height: rowHeight)
                         .overlay(
                             HStack(spacing: 0) {
                                 if let firstEvent = eventsFiltered.first, let firstStart = firstEvent.startDate {
@@ -67,7 +66,7 @@ struct WeekSplitComponent: View {
                                                     .stroke(eventColor.opacity(0.75), lineWidth: 2)
                                             }
                                         }
-                                        .frame(width: eventWidth, height: 55)
+                                        .frame(width: eventWidth, height: rowHeight)
 
                                         if index < eventsFiltered.count - 1,
                                            let nextStart = eventsFiltered[index + 1].startDate {
@@ -86,10 +85,10 @@ struct WeekSplitComponent: View {
                     if isToday {
                         let nowHours = now.timeIntervalSince(wakeDate) / 3600
                         Rectangle()
-                            .fill(Color.white)
-                            .frame(width: 2, height: 55)
-                            .shadow(color: .white.opacity(0.9), radius: 4)
-                            .shadow(color: .white.opacity(0.5), radius: 8)
+                            .fill(Color.primary)
+                            .frame(width: 2, height: rowHeight)
+                            .shadow(color: Color.primary.opacity(0.9), radius: 4)
+                            .shadow(color: Color.primary.opacity(0.5), radius: 8)
                             .offset(x: nowHours * scaler - geometry.size.width / 2)
                     }
 
@@ -98,12 +97,14 @@ struct WeekSplitComponent: View {
                         Spacer()
                         Text("\(eventsFiltered.count) tasks, \(String(format: "%.0f", eventsFiltered.reduce(0) { $0 + ($1.endDate?.timeIntervalSince($1.startDate ?? Date()) ?? 0) } / 3600)) h")
                     }
-                    .padding()
+                    .padding(.horizontal)
+                    .frame(height: rowHeight)
                     .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.gray, lineWidth: 1))
                     .foregroundColor(.primary)
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 20))
             }
         }
+        .frame(height: rowHeight)
     }
 }
