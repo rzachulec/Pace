@@ -65,7 +65,8 @@ struct UpcomingTasksList: View {
             EditTask(event: task)
                 .environmentObject(calendarManager)
                 .environmentObject(stateManager)
-                .presentationDetents([.fraction(0.7)])
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
                 .presentationBackground(.thinMaterial)
         }
     }

@@ -27,8 +27,20 @@ private struct DayProgressBadge: View {
     @AppStorage("accentColorName") private var accentColorName: String = "blue"
     @State private var showScheduleSettings = false
 
+    // MARK: - Animation state
+    // Both properties start at zero on every appear so the fill sweeps up
+    // from empty each time the tab is opened.  Two simultaneous effects
+    // (height growth + opacity fade-in) satisfy the assignment requirement
+    // for at least two custom transition effects in a single programmed animation.
+    @State private var animatedPct: Double = 0
+    @State private var colorOpacity: Double = 0
+
+    // Tune these to adjust the animation at the demo:
+    private static let appearDuration: Double = 1.0
+    private static let appearBounce:   Double = 0.15
+    private static let appearDelay:    Double = 0.3
+
     var body: some View {
-        let pct      = Double(stateManager.percentageOfDay) / 100.0
         let sleepHour = stateManager.sleepTime % 24
 
         Button(action: { showScheduleSettings = true }) {
@@ -40,6 +52,7 @@ private struct DayProgressBadge: View {
                     .font(.system(size: 32, weight: .bold))
                     .foregroundColor(.white)
                     .contentTransition(.numericText())
+                    .animation(.easeInOut(duration: 0.5), value: stateManager.percentageOfDay)
             }
             .frame(width: 115, height: 100)
             .background(
@@ -48,14 +61,30 @@ private struct DayProgressBadge: View {
                 // so there's no floating rounded rectangle at partial fill levels.
                 ZStack(alignment: .bottom) {
                     Color.gray.opacity(0.5)
-                    Color.fromAccentName(accentColorName).opacity(0.35)
-                        .frame(height: 100 * pct)
+                    Color.fromAccentName(accentColorName).opacity(colorOpacity)
+                        .frame(height: 100 * animatedPct)
                 }
             )
             .clipShape(RoundedRectangle(cornerRadius: 20))
-            .animation(.easeInOut(duration: 0.5), value: stateManager.percentageOfDay)
         }
         .buttonStyle(.plain)
+        .onAppear {
+            animatedPct  = 0
+            colorOpacity = 0
+            let target = Double(stateManager.percentageOfDay) / 100.0
+            withAnimation(
+                .spring(duration: Self.appearDuration, bounce: Self.appearBounce)
+                .delay(Self.appearDelay)
+            ) {
+                animatedPct  = target
+                colorOpacity = 0.35
+            }
+        }
+        .onChange(of: stateManager.percentageOfDay) { _, newVal in
+            withAnimation(.easeInOut(duration: 0.5)) {
+                animatedPct = Double(newVal) / 100.0
+            }
+        }
         .sheet(isPresented: $showScheduleSettings) {
             NavigationStack {
                 ScheduleSettingsView()
@@ -131,12 +160,12 @@ struct TodayView: View {
                 statsHeader
                 CurrentTask()
                     .padding(.bottom, 10)
+                Spacer()
                 AddTask()
                     .overlay(
                         RoundedRectangle(cornerRadius: 20)
                             .strokeBorder(.gray, lineWidth: 1)
                     )
-                Spacer()
             }
             .padding(.vertical)
 

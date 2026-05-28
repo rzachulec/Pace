@@ -28,11 +28,25 @@ struct UpcomingTask: View {
         let accentColor: Color = event.ekEvent?.calendar.cgColor.map { Color(cgColor: $0) } ?? .accentColor
 
         HStack {
-            Text(event.title)
-                .font(.title2)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(event.title)
+                    .font(.title3)
+                    .fontWeight(.medium)
+                
+                if let location = event.location, !location.isEmpty {
+                    Label(location, systemImage: "mappin.and.ellipse")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            
             Spacer()
+            
             if let start = event.startDate, let end = event.endDate {
                 Text("\(start.formatted(date: .omitted, time: .shortened)) - \(Int(end.timeIntervalSince(start) / 60)) min")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .padding()
