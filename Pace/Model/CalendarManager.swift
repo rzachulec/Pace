@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import EventKit
+import CoreLocation
 
 #if os(macOS)
 import AppKit
@@ -28,14 +29,16 @@ struct EventData: Hashable, Identifiable, Codable {
     var title: String
     var startDate: Date?
     var endDate: Date?
-    var placementType: String = "Dynamic"
+    var placementType: String = "Static"
     var priority: String = "Regular"
     var isAllDay: Bool
+    var location: String?
+    var createdAt: Date = Date()
 
     var ekEvent: EKEvent? // Optional EKEvent reference (not saved in JSON)
 
     enum CodingKeys: String, CodingKey {
-        case id, title, startDate, endDate, placementType, priority, isAllDay
+        case id, title, startDate, endDate, placementType, priority, isAllDay, location, createdAt
     }
 }
 
@@ -43,7 +46,7 @@ struct EventData: Hashable, Identifiable, Codable {
 
 /// Abstracts EKEventStore so CalendarManager can be tested without a real calendar.
 protocol CalendarProviding: AnyObject {
-    func requestFullAccessToEvents(completion: @escaping (Bool, Error?) -> Void)
+    func requestFullAccessToEvents(completion: @escaping @Sendable (Bool, Error?) -> Void)
     func predicateForEvents(withStart startDate: Date, end endDate: Date, calendars: [EKCalendar]?) -> NSPredicate
     func events(matching predicate: NSPredicate) -> [EKEvent]
     /// Creates a new blank EKEvent backed by this store — needed because EKEvent(eventStore:) takes a concrete EKEventStore.
@@ -204,6 +207,8 @@ class CalendarManager: ObservableObject {
                         placementType: existing.placementType,
                         priority: existing.priority,
                         isAllDay: event.isAllDay,
+                        location: event.location,
+                        createdAt: existing.createdAt,
                         ekEvent: event
                     )
                 } else {
@@ -212,7 +217,10 @@ class CalendarManager: ObservableObject {
                         title: event.title,
                         startDate: event.startDate,
                         endDate: event.endDate,
+                        placementType: "Static",
                         isAllDay: event.isAllDay,
+                        location: event.location,
+                        createdAt: event.startDate ?? Date(),
                         ekEvent: event
                     )
                 }
@@ -235,7 +243,7 @@ class CalendarManager: ObservableObject {
         return loaded
     }
 
-    func createEvent(title: String, startDate: Date, endDate: Date, placementType: String, priority: String) {
+    func createEvent(title: String, startDate: Date, endDate: Date, placementType: String, priority: String, location: String? = nil) {
         guard let defaultCalendar = store.defaultCalendarForNewEvents else {
             print("❌ Cannot create event: no default calendar (is calendar access granted?)")
             return
@@ -246,6 +254,7 @@ class CalendarManager: ObservableObject {
         ekEvent.startDate = startDate
         ekEvent.endDate = endDate
         ekEvent.calendar = defaultCalendar
+        ekEvent.location = location
 
         do {
             try store.save(ekEvent, span: .thisEvent)
@@ -268,6 +277,8 @@ class CalendarManager: ObservableObject {
             placementType: placementType,
             priority: priority,
             isAllDay: false,
+            location: location,
+            createdAt: Date(),
             ekEvent: ekEvent
         )
 
@@ -276,7 +287,7 @@ class CalendarManager: ObservableObject {
         // events.append already publishes the change — no need to re-fetch from disk + EventKit
     }
 
-    func updateEvent(eventID: String, newTitle: String, newStartDate: Date, newEndDate: Date, placementType: String, priority: String) {
+    func updateEvent(eventID: String, newTitle: String, newStartDate: Date, newEndDate: Date, placementType: String, priority: String, location: String? = nil) {
         guard let index = events.firstIndex(where: { $0.id == eventID }) else {
             print("Error: Event with ID \(eventID) not found")
             return
@@ -288,6 +299,7 @@ class CalendarManager: ObservableObject {
         updatedEvent.endDate = newEndDate
         updatedEvent.placementType = placementType
         updatedEvent.priority = priority
+        updatedEvent.location = location
 
         events[index] = updatedEvent
         persistence.save(events)
@@ -296,6 +308,7 @@ class CalendarManager: ObservableObject {
             ekEvent.title = newTitle
             ekEvent.startDate = newStartDate
             ekEvent.endDate = newEndDate
+            ekEvent.location = location
 
             do {
                 try store.save(ekEvent, span: .thisEvent)
@@ -362,102 +375,291 @@ class CalendarManager: ObservableObject {
 #endif
     }
 
-    func placeTask(duration: TimeInterval, workingDays: [Bool], wakeUpTime: Int, sleepTime: Int, workStartTime: Int, workEndTime: Int, breakDuration: Int, priority: String, completion: @escaping (Result<Date, Error>) -> Void) {
-        let calendar = Calendar.current
-        var searchDate = Date()
-        var weeksSearched = 0
-        var includeNonWorkingDays = false
-        let now = Calendar.current
+    func placeTask(
+        duration: TimeInterval,
+        workingDays: [Bool],
+        wakeUpTime: Int,
+        sleepTime: Int,
+        workStartTime: Int,
+        workEndTime: Int,
+        breakDuration: Int,
+        priority: String,
+        newTaskCoordinate: CLLocationCoordinate2D? = nil,
+        transportMode: TransportMode = .automobile,
+        travelTimePadding: Int = 0,
+        completion: @escaping (Result<Date, Error>) -> Void
+    ) {
+        // Capture published flags before dispatching to background so that a UI
+        // retry with updated flags triggers a fresh call rather than mutating a
+        // running search.
+        let allowNonWorkingDays = self.includeNonWorkingDays
+        let allowRescheduling   = self.placeByRescheduling
 
-        while weeksSearched < 4 {
-            for dayOffset in 0..<7 {
-                let candidateDay = calendar.date(byAdding: .day, value: dayOffset, to: searchDate)!
-                let weekdayIndex = calendar.component(.weekday, from: candidateDay) % 7
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
 
-                print(weekdayIndex)
+            let calendar      = Calendar.current
+            let now           = Date()
+            let breakInterval = Double(breakDuration) * 60
 
-                if !includeNonWorkingDays && !workingDays[weekdayIndex] {
-                    continue
-                }
+            // Snapshot events once so the array can't change under us mid-search.
+            let eventsSnapshot = self.events
 
-                let midnight = calendar.startOfDay(for: candidateDay)
-                guard let startOfDay = calendar.date(byAdding: .hour, value: wakeUpTime, to: midnight),
-                      let endOfDay = calendar.date(byAdding: .hour, value: sleepTime, to: midnight) else {
-                    continue
-                }
+            // Pre-compute travel times between the new task's location and all event
+            // locations in the search window.
+            let eventLocations = Set(eventsSnapshot.compactMap { $0.location }.filter { !$0.isEmpty })
+            let travelCache: TravelTimeCache? = newTaskCoordinate.flatMap { coord in
+                guard !eventLocations.isEmpty else { return nil }
+                return TravelTimeCache.build(
+                    newTaskCoordinate: coord,
+                    eventLocations: eventLocations,
+                    transportType: transportMode.mkType,
+                    padding: Double(travelTimePadding) * 60
+                )
+            }
 
-                let dailyEvents = events.filter {
-                    guard let eventStart = $0.startDate else { return false }
-                    guard !$0.isAllDay else { return false }
-                    return calendar.isDate(eventStart, inSameDayAs: candidateDay)
-                }.sorted { $0.startDate ?? .distantFuture < $1.startDate ?? .distantFuture }
+            // MARK: – findSlot
 
-                var candidateStart = startOfDay
+            /// Scans day-by-day from `searchStart` (inclusive) to `searchEnd`
+            /// (exclusive), returning the earliest `(candidateStart, toDisplace)`
+            /// pair that satisfies work-hour and conflict constraints, or `nil`.
+            ///
+            /// `allowDisplacement`: when `true`, a slot blocked only by lower-
+            /// priority Dynamic tasks is considered valid; those tasks are returned
+            /// so the caller can reschedule them after placing the new event.
+            func findSlot(from searchStart: Date,
+                          to   searchEnd:   Date,
+                          allowDisplacement: Bool) -> (start: Date, toDisplace: [EventData])? {
 
-                print("candidateStart: \(candidateStart)")
-                print("endOfDay: \(endOfDay)")
-                print("searchDate: \(searchDate)")
+                let currentPriorityValue = TaskDefaults.priorities.firstIndex(of: priority) ?? 0
+                var dayStart = searchStart
 
-                while candidateStart < searchDate {
-                    candidateStart = calendar.date(byAdding: .minute, value: 15, to: candidateStart)!
-                }
+                while dayStart < searchEnd {
+                    // EKCalendar weekday: Sun=1…Sat=7; %7 maps Sun→1, Mon→2…Sat→0.
+                    let weekdayIndex = calendar.component(.weekday, from: dayStart) % 7
 
-                print(candidateStart)
-                while candidateStart.addingTimeInterval(duration) <= endOfDay {
-                    let candidateEnd = candidateStart.addingTimeInterval(duration)
-
-                    print(candidateEnd)
-
-                    let candidateHour = calendar.component(.hour, from: candidateStart)
-                    let isWorkTime = candidateHour >= workStartTime && candidateHour < workEndTime
-
-                    if !isWorkTime {
-                        candidateStart = calendar.date(byAdding: .minute, value: 15, to: candidateStart)!
+                    if !allowNonWorkingDays && !workingDays[weekdayIndex] {
+                        dayStart = calendar.startOfDay(
+                            for: calendar.date(byAdding: .day, value: 1, to: dayStart)!
+                        )
                         continue
                     }
 
-                    let hasConflict = dailyEvents.contains { event in
-                        guard let eventStart = event.startDate, let eventEnd = event.endDate else { return false }
-                        return candidateStart - Double(breakDuration) * 60 < eventEnd && candidateEnd + Double(breakDuration) * 60 > eventStart
+                    let midnight = calendar.startOfDay(for: dayStart)
+                    guard
+                        let startOfDay = calendar.date(byAdding: .hour, value: wakeUpTime, to: midnight),
+                        let endOfDay   = calendar.date(byAdding: .hour, value: sleepTime,  to: midnight)
+                    else {
+                        dayStart = calendar.date(byAdding: .day, value: 1, to: midnight)!
+                        continue
                     }
 
-                    if !hasConflict {
-                        completion(.success(candidateStart))
-                        return
+                    let dailyEvents = eventsSnapshot
+                        .filter {
+                            guard let s = $0.startDate else { return false }
+                            return !$0.isAllDay && calendar.isDate(s, inSameDayAs: dayStart)
+                        }
+                        .sorted { $0.startDate ?? .distantFuture < $1.startDate ?? .distantFuture }
+
+                    // For today, skip past slots; for future days, start at wakeUpTime.
+                    // Round up to the next 15-minute boundary (O(1) vs. the previous loop).
+                    var candidateStart = max(startOfDay, dayStart)
+                    let rem = calendar.component(.minute, from: candidateStart) % 15
+                    if rem != 0 {
+                        candidateStart = calendar.date(byAdding: .minute, value: 15 - rem,
+                                                       to: candidateStart)!
                     }
 
-                    print("now: \(now), proposition:  \(candidateStart)")
+                    while candidateStart.addingTimeInterval(duration) <= endOfDay
+                            && candidateStart < searchEnd {
 
-                    candidateStart = calendar.date(byAdding: .minute, value: 15, to: candidateStart)!
+                        let candidateEnd  = candidateStart.addingTimeInterval(duration)
+                        let candidateHour = calendar.component(.hour, from: candidateStart)
+
+                        guard candidateHour >= workStartTime && candidateHour < workEndTime else {
+                            candidateStart = calendar.date(byAdding: .minute, value: 15,
+                                                           to: candidateStart)!
+                            continue
+                        }
+
+                        let conflicts = dailyEvents.filter { event in
+                            guard let es = event.startDate, let ee = event.endDate else { return false }
+                            let afterBuf  = travelCache?.bufferAfterEvent(location: event.location,
+                                                                           fallback: breakInterval) ?? breakInterval
+                            let beforeBuf = travelCache?.bufferBeforeEvent(location: event.location,
+                                                                            fallback: breakInterval) ?? breakInterval
+                            return candidateStart - afterBuf < ee && candidateEnd + beforeBuf > es
+                        }
+
+                        // A conflict is displaceable only when ALL three hold:
+                        //   1. allowDisplacement — caller has enabled it (user consent or
+                        //      automatic forced displacement for high-priority deadlines).
+                        //   2. placementType == "Dynamic" — Static events are fixed
+                        //      appointments and must never be moved.
+                        //   3. The conflict's priority is strictly lower than the new task's.
+                        var canPlace   = true
+                        var toDisplace = [EventData]()
+
+                        for conflict in conflicts {
+                            let cp = TaskDefaults.priorities.firstIndex(of: conflict.priority) ?? 0
+                            if allowDisplacement
+                                && conflict.placementType == "Dynamic"
+                                && cp < currentPriorityValue {
+                                toDisplace.append(conflict)
+                            } else {
+                                canPlace = false
+                                break
+                            }
+                        }
+
+                        if canPlace { return (candidateStart, toDisplace) }
+
+                        candidateStart = calendar.date(byAdding: .minute, value: 15,
+                                                       to: candidateStart)!
+                    }
+
+                    dayStart = calendar.date(byAdding: .day, value: 1, to: midnight)!
+                }
+                return nil
+            }
+
+            // MARK: – execute
+
+            /// Calls completion on the main thread, then deletes and reschedules
+            /// any displaced events (also on the main thread so @Published mutations
+            /// are thread-safe).
+            ///
+            /// Ordering matters: completion is called FIRST so the caller can create
+            /// the new event and make its slot visible in self.events before displaced
+            /// tasks search for new slots — preventing them from landing in the same slot.
+            func execute(slot: Date, displaced: [EventData]) {
+                DispatchQueue.main.async {
+                    completion(.success(slot))
+
+                    for event in displaced {
+                        self.deleteEvent(eventID: event.id)
+                        let dur = event.endDate?.timeIntervalSince(event.startDate ?? Date()) ?? 3600
+                        self.placeTask(
+                            duration: dur,
+                            workingDays: workingDays,
+                            wakeUpTime: wakeUpTime,
+                            sleepTime: sleepTime,
+                            workStartTime: workStartTime,
+                            workEndTime: workEndTime,
+                            breakDuration: breakDuration,
+                            priority: event.priority
+                        ) { result in
+                            if case .success(let newDate) = result {
+                                self.createEvent(
+                                    title: event.title,
+                                    startDate: newDate,
+                                    endDate: newDate.addingTimeInterval(dur),
+                                    placementType: event.placementType,
+                                    priority: event.priority,
+                                    location: event.location
+                                )
+                            } else {
+                                print("⚠️ Failed to re-schedule displaced task: \(event.title)")
+                            }
+                        }
+                    }
                 }
             }
 
-            if weeksSearched == 0 && workingDays.contains(false) {
-                DispatchQueue.main.async {
-                    self.alertTitle = "No Free Time Found"
-                    self.alertMessage = "No available time was found in the current week. Would you like to schedule this task on non-working days?"
-                    self.showAlert = true
+            // MARK: – Priority-aware placement
+
+            // Each priority tier enforces a deadline window for placement:
+            //
+            //   High (24 h)
+            //     Pass 1 – free slot within 24 h (no displacement).
+            //     Pass 2 – forced displacement within 24 h: lower-priority Dynamic
+            //              tasks are automatically rescheduled; no user consent needed
+            //              because the high-priority deadline overrides them.
+            //     Pass 3 – if 24 h is still impossible (e.g. only Static/equal-priority
+            //              conflicts), place at the earliest slot beyond 24 h and alert.
+            //
+            //   Regular (72 h)
+            //     Pass 1 – slot within 72 h (with optional user-consented displacement).
+            //     Pass 2 – earliest slot beyond 72 h + deadline-miss alert.
+            //
+            //   Low – no deadline; earliest slot in the full 4-week window.
+
+            let window24h = now.addingTimeInterval(24 * 3600)
+            let window72h = now.addingTimeInterval(72 * 3600)
+            let window4w  = now.addingTimeInterval(28 * 24 * 3600)
+
+            switch priority {
+
+            case "High":
+                // Pass 1: find a completely free slot within 24 h.
+                if let r = findSlot(from: now, to: window24h, allowDisplacement: false) {
+                    execute(slot: r.start, displaced: [])
+                    return
                 }
-                return
-            } else if weeksSearched == 0 {
-                DispatchQueue.main.async {
-                    self.alertTitle = "No Free Time Found"
-                    self.alertMessage = "No available time was found in the current week. Would you like to re-schedule lower priority tasks to make space?"
-                    self.showAlert = true
+                // Pass 2: 24 h window is fully occupied — forcibly displace lower-
+                //         priority Dynamic tasks to honour the high-priority deadline.
+                if let r = findSlot(from: now, to: window24h, allowDisplacement: true) {
+                    execute(slot: r.start, displaced: r.toDisplace)
+                    return
                 }
-                return
+                // Pass 3: forced displacement still couldn't free a 24 h slot (all
+                //         conflicts are Static or equal/higher priority). Schedule at
+                //         the earliest available time beyond 24 h and warn the user.
+                if let r = findSlot(from: window24h, to: window4w, allowDisplacement: allowRescheduling) {
+                    DispatchQueue.main.async {
+                        self.alertTitle   = "24-Hour Deadline Missed"
+                        self.alertMessage = "No slot could be freed within 24 hours even after rescheduling lower-priority tasks. The task has been placed at the earliest available time."
+                        self.showAlert    = true
+                    }
+                    execute(slot: r.start, displaced: r.toDisplace)
+                    return
+                }
+
+            case "Regular":
+                // Pass 1: slot within 72 h with optional user-consented displacement.
+                if let r = findSlot(from: now, to: window72h, allowDisplacement: allowRescheduling) {
+                    execute(slot: r.start, displaced: r.toDisplace)
+                    return
+                }
+                // Pass 2: 72 h window exhausted — schedule beyond it and warn.
+                if let r = findSlot(from: window72h, to: window4w, allowDisplacement: allowRescheduling) {
+                    DispatchQueue.main.async {
+                        self.alertTitle   = "72-Hour Window Missed"
+                        self.alertMessage = "No slot was available within 72 hours. The task has been placed at the earliest available time beyond that window."
+                        self.showAlert    = true
+                    }
+                    execute(slot: r.start, displaced: r.toDisplace)
+                    return
+                }
+
+            default: // "Low" — no deadline constraint
+                if let r = findSlot(from: now, to: window4w, allowDisplacement: allowRescheduling) {
+                    execute(slot: r.start, displaced: r.toDisplace)
+                    return
+                }
             }
 
-            searchDate = calendar.date(byAdding: .weekOfYear, value: 1, to: searchDate)!
-            weeksSearched += 1
+            // ── No slot found anywhere in the 4-week window ──────────────────────
+            // Surface the most actionable escalation path to the user.
+            // Do NOT call completion(.failure) for the first two alerts — the UI is
+            // expected to set the corresponding flag and retry placeTask.
+            DispatchQueue.main.async {
+                if !allowNonWorkingDays && workingDays.contains(false) {
+                    self.alertTitle   = "No Free Time Found"
+                    self.alertMessage = "No available time was found in the next 4 weeks. Would you like to also search non-working days?"
+                    self.showAlert    = true
+                } else if !allowRescheduling {
+                    self.alertTitle   = "No Free Time Found"
+                    self.alertMessage = "No available time was found in the next 4 weeks. Would you like to re-schedule lower-priority tasks to make space?"
+                    self.showAlert    = true
+                } else {
+                    self.alertTitle   = "No Time Available"
+                    self.alertMessage = "No available time slot was found within the next 4 weeks even after considering all days and rescheduling. Consider adjusting your preferred working hours."
+                    self.showAlert    = true
+                    completion(.failure(NSError(domain: "NoTimeAvailable", code: 2, userInfo: nil)))
+                }
+            }
         }
-
-        DispatchQueue.main.async {
-            self.alertTitle = "No Time Available"
-            self.alertMessage = "No available time slot was found within the next 4 weeks. Consider adjusting your preferred working hours."
-            self.showAlert = true
-        }
-        completion(.failure(NSError(domain: "No Time Available", code: 2, userInfo: nil)))
     }
 
     // MARK: - Subscribed calendar management
